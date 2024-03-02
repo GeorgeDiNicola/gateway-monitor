@@ -11,6 +11,7 @@ type SpeedTest interface {
 	CollectSpeedMetrics() (downloadSpeed, uploadSpeed string, err error)
 }
 
+// capture and report upload and download speed
 func CollectSpeedMetrics() (downloadSpeed, uploadSpeed string, err error) {
 	cmd := exec.Command("speedtest-cli", "--simple")
 	var out bytes.Buffer

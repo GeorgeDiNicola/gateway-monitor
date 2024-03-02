@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sync"
 
 	"github.com/georgedinicola/gateway-monitor/network"
 	"github.com/sirupsen/logrus"
@@ -34,7 +35,8 @@ func main() {
 	log.Out = os.Stdout
 	log.Formatter = &logrus.JSONFormatter{}
 
-	fmt.Println("Measurements are classified into groups: Excellent, Good, Fair, Poor/Weak")
+	// store statistics reported by network functions
+	statistics := make(map[string]interface{})
 
 	gatewayIPAddr, err := getGatewayIpAddress()
 	if err != nil {
@@ -42,24 +44,70 @@ func main() {
 		return
 	}
 	fmt.Println("Gateway IP:", gatewayIPAddr)
+	fmt.Println("Measurements are classified into groups: Excellent, Good, Fair, Poor/Weak")
 
-	// TODO: use goroutines for better performance
-	signalStrength, err := network.GetGatewaySignalStrength()
-	if err != nil {
-		log.Errorf("error performing signal test: %v", err)
+	var wg sync.WaitGroup
+
+	type Result struct {
+		Result interface{}
+		Error  error
+		ID     string
 	}
-	category := network.ClassifySignalStrength(signalStrength)
-	fmt.Printf("Gateway Signal Strength: %v (%v)\n", signalStrength, category)
+	resultsChannel := make(chan Result, 3)
 
-	downloadSpeed, uploadSpeed, err := network.CollectSpeedMetrics()
-	if err != nil {
-		log.Errorf("error performing speed test: %v", err)
-	}
-	fmt.Println("Download Speed:", downloadSpeed)
-	fmt.Println("Upload Speed:", uploadSpeed)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if result, err := network.GetGatewaySignalStrength(); err != nil {
+			resultsChannel <- Result{Error: err, ID: "GetGatewaySignalStrength"}
+		} else {
+			statistics["signalStrength"] = result
+			statistics["signalStrengthClassification"] = network.ClassifySignalStrength(result)
+			resultsChannel <- Result{Result: result, ID: "GetGatewaySignalStrength"}
+		}
+	}()
 
-	err = network.PingGatewayForStats(gatewayIPAddr, 25, 1, 60)
-	if err != nil {
-		log.Errorf("error performing ping test: %v", err)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if downloadSpeed, uploadSpeed, err := network.CollectSpeedMetrics(); err != nil {
+			resultsChannel <- Result{Error: err, ID: "CollectSpeedMetrics"}
+		} else {
+			statistics["downloadSpeed"] = downloadSpeed
+			statistics["uploadSpeed"] = uploadSpeed
+			resultsChannel <- Result{Result: []string{"Upload Speed: " + uploadSpeed, "Download Speed: " + downloadSpeed}, ID: "CollectSpeedMetrics"}
+		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := network.PingGatewayForStats(gatewayIPAddr, 25, 1, 60); err != nil {
+			resultsChannel <- Result{Error: err, ID: "PingGatewayForStats"}
+		} else {
+			resultsChannel <- Result{Result: nil, ID: "PingGatewayForStats"}
+		}
+	}()
+
+	go func() {
+		wg.Wait()
+		close(resultsChannel)
+	}()
+
+	// process results as they arrive
+	for result := range resultsChannel {
+		if result.Error != nil {
+			log.Errorf("%s returned an error: %v\n", result.ID, result.Error)
+			continue
+		}
+
+		switch result.ID {
+		case "GetGatewaySignalStrength":
+			fmt.Printf("Gateway Signal Strength: %v (%v)\n", statistics["signalStrength"], statistics["signalStrengthClassification"])
+		case "CollectSpeedMetrics":
+			fmt.Printf("Download Speed: %v\n", statistics["downloadSpeed"])
+			fmt.Printf("Upload Speed: %v\n", statistics["uploadSpeed"])
+		case "PingGatewayForStats":
+		}
 	}
 }
