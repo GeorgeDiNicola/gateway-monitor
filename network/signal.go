@@ -15,7 +15,7 @@ type Signal interface {
 	ClassifySignalStrength(signalStrength string) string
 }
 
-// measures the WiFi signal strength
+// measures the gateway' signal strength in dBm
 func GetGatewaySignalStrength() (string, error) {
 	var cmd *exec.Cmd
 
