@@ -12,5 +12,16 @@ A diagnostic monitoring tool that collects metrics about a home internet gateway
 ## Supported Operating Systems
 macOS, Linux
 
+## Output
+```
+Gateway IP: 10.0.0.1
+Measurements are classified into groups: Excellent, Good, Fair, Poor/Weak
+Gateway Signal Strength: -55 (Good)
+Download Speed: 759.32
+Upload Speed: 91.63
+Packet Loss percentage: 0
+Round-trip min/avg/max/stddev = 4.2/7.58896/21.108/3.337278
+```
+
 ## Dashboard of Metrics Streamed to the InfluxDB
 ![Dashboard](influx_dashboard.png)
