@@ -35,9 +35,6 @@ func main() {
 	log.Out = os.Stdout
 	log.Formatter = &logrus.JSONFormatter{}
 
-	// store statistics reported by network functions
-	statistics := make(map[string]interface{})
-
 	gatewayIPAddr, err := getGatewayIpAddress()
 	if err != nil {
 		log.Fatalf("Could not get gateway IP address: %v", err)
@@ -61,8 +58,6 @@ func main() {
 		if result, err := network.GetGatewaySignalStrength(); err != nil {
 			resultsChannel <- Result{Error: err, ID: "GetGatewaySignalStrength"}
 		} else {
-			statistics["signalStrength"] = result
-			statistics["signalStrengthClassification"] = network.ClassifySignalStrength(result)
 			resultsChannel <- Result{Result: result, ID: "GetGatewaySignalStrength"}
 		}
 	}()
@@ -70,22 +65,20 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if downloadSpeed, uploadSpeed, err := network.CollectSpeedMetrics(); err != nil {
+		if result, err := network.CollectSpeedMetrics(); err != nil {
 			resultsChannel <- Result{Error: err, ID: "CollectSpeedMetrics"}
 		} else {
-			statistics["downloadSpeed"] = downloadSpeed
-			statistics["uploadSpeed"] = uploadSpeed
-			resultsChannel <- Result{Result: []string{"Upload Speed: " + uploadSpeed, "Download Speed: " + downloadSpeed}, ID: "CollectSpeedMetrics"}
+			resultsChannel <- Result{Result: result, ID: "CollectSpeedMetrics"}
 		}
 	}()
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := network.PingGatewayForStats(gatewayIPAddr, 25, 1, 60); err != nil {
+		if result, err := network.PingGatewayForStats(gatewayIPAddr, 25, 1, 60); err != nil {
 			resultsChannel <- Result{Error: err, ID: "PingGatewayForStats"}
 		} else {
-			resultsChannel <- Result{Result: nil, ID: "PingGatewayForStats"}
+			resultsChannel <- Result{Result: result, ID: "PingGatewayForStats"}
 		}
 	}()
 
@@ -103,11 +96,17 @@ func main() {
 
 		switch result.ID {
 		case "GetGatewaySignalStrength":
-			fmt.Printf("Gateway Signal Strength: %v (%v)\n", statistics["signalStrength"], statistics["signalStrengthClassification"])
+			signalData := result.Result.(network.SignalData)
+			fmt.Printf("Gateway Signal Strength: %v (%v)\n", signalData.SignalStrength, signalData.SignalStrengthClassification)
 		case "CollectSpeedMetrics":
-			fmt.Printf("Download Speed: %v\n", statistics["downloadSpeed"])
-			fmt.Printf("Upload Speed: %v\n", statistics["uploadSpeed"])
+			speedTestData := result.Result.(network.SpeedTestData)
+			fmt.Printf("Download Speed: %v\n", speedTestData.DownloadSpeed)
+			fmt.Printf("Upload Speed: %v\n", speedTestData.UploadSpeed)
 		case "PingGatewayForStats":
+			pingData := result.Result.(network.PingData)
+			fmt.Printf("Packet Loss percentage: %v\n", pingData.PacketLossPercentage)
+			fmt.Printf("Round-trip min/avg/max/stddev = %v/%v/%v/%v\n",
+				pingData.MinRtt, pingData.AvgRtt, pingData.MaxRtt, pingData.StdDevRtt)
 		}
 	}
 }

@@ -5,28 +5,46 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
+	"strconv"
+	"strings"
+
+	"github.com/labstack/gommon/log"
 )
 
 type SpeedTest interface {
-	CollectSpeedMetrics() (downloadSpeed, uploadSpeed string, err error)
+	CollectSpeedMetrics() (SpeedTestData, error)
 }
 
 // capture and report upload and download speed
-func CollectSpeedMetrics() (downloadSpeed, uploadSpeed string, err error) {
+func CollectSpeedMetrics() (SpeedTestData, error) {
+	var data SpeedTestData
+
 	cmd := exec.Command("speedtest-cli", "--simple")
 	var out bytes.Buffer
 	cmd.Stdout = &out
 
-	err = cmd.Run()
+	err := cmd.Run()
 	if err != nil {
-		return "", "", err
+		return data, err
 	}
 
 	output := out.String()
-	downloadSpeed = parseSpeed(output, "Download")
-	uploadSpeed = parseSpeed(output, "Upload")
 
-	return downloadSpeed, uploadSpeed, nil
+	parsedDownloadSpeed := strings.TrimSpace(strings.TrimSuffix(parseSpeed(output, "Download"), " Mbps"))
+	downloadSpeed, err := strconv.ParseFloat(parsedDownloadSpeed, 64)
+	if err != nil {
+		log.Error("could not parse download speed")
+	}
+	data.DownloadSpeed = downloadSpeed
+
+	parsedUploadSpeed := strings.TrimSpace(strings.TrimSuffix(parseSpeed(output, "Upload"), " Mbps"))
+	uploadSpeed, err := strconv.ParseFloat(parsedUploadSpeed, 64)
+	if err != nil {
+		log.Error("could not parse upload speed")
+	}
+	data.UploadSpeed = uploadSpeed
+
+	return data, nil
 }
 
 func parseSpeed(output, speedType string) string {

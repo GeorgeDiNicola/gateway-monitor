@@ -11,12 +11,14 @@ import (
 )
 
 type Signal interface {
-	GetGatewaySignalStrength() (string, error)
+	GetGatewaySignalStrength() (SignalData, error)
 	ClassifySignalStrength(signalStrength string) string
 }
 
 // measures the gateway' signal strength in dBm
-func GetGatewaySignalStrength() (string, error) {
+func GetGatewaySignalStrength() (SignalData, error) {
+	var data SignalData
+
 	var cmd *exec.Cmd
 
 	switch runtime.GOOS {
@@ -25,17 +27,31 @@ func GetGatewaySignalStrength() (string, error) {
 	case "linux":
 		cmd = exec.Command("sh", "-c", "iwconfig 2>/dev/null | grep -i --color=never 'signal level'")
 	default:
-		return "", fmt.Errorf("unsupported platform")
+		return data, fmt.Errorf("unsupported platform")
 	}
 
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	err := cmd.Run()
 	if err != nil {
-		return "", err
+		return data, err
 	}
 
-	return parseSignalStrength(out.String(), runtime.GOOS)
+	parsedSignalStrength, err := parseSignalStrength(out.String(), runtime.GOOS)
+	if err != nil {
+		return data, err
+	}
+
+	signalStrength, err := strconv.Atoi(strings.TrimSuffix(parsedSignalStrength, " dBm"))
+	if err != nil {
+		return data, err
+	}
+	classifiedSignalStrength := ClassifySignalStrength(signalStrength)
+
+	data.SignalStrength = float64(signalStrength)
+	data.SignalStrengthClassification = classifiedSignalStrength
+
+	return data, nil
 }
 
 func parseSignalStrength(output, osType string) (string, error) {
@@ -66,20 +82,15 @@ func parseSignalStrength(output, osType string) (string, error) {
 	return signalStrength, nil
 }
 
-func ClassifySignalStrength(signalStrength string) string {
-	dbm, err := strconv.Atoi(strings.TrimSuffix(signalStrength, " dBm"))
-	if err != nil {
-		return "Unknown"
-	}
-
+func ClassifySignalStrength(signalStrength int) string {
 	switch {
-	case dbm >= -30:
+	case signalStrength >= -30:
 		return "Excellent"
-	case dbm >= -60:
+	case signalStrength >= -60:
 		return "Good"
-	case dbm >= -70:
+	case signalStrength >= -70:
 		return "Fair"
-	case dbm >= -80:
+	case signalStrength >= -80:
 		return "Weak"
 	default:
 		return "Poor"
