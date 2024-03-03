@@ -2,12 +2,16 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"sync"
+	"time"
 
 	"github.com/georgedinicola/gateway-monitor/network"
+	influxdb2 "github.com/influxdata/influxdb-client-go"
+	"github.com/influxdata/influxdb-client-go/api/write"
 	"github.com/sirupsen/logrus"
 )
 
@@ -35,6 +39,7 @@ func main() {
 	log.Out = os.Stdout
 	log.Formatter = &logrus.JSONFormatter{}
 
+	// TODO: add config website name or default gateway option
 	gatewayIPAddr, err := getGatewayIpAddress()
 	if err != nil {
 		log.Fatalf("Could not get gateway IP address: %v", err)
@@ -87,6 +92,17 @@ func main() {
 		close(resultsChannel)
 	}()
 
+	token := os.Getenv("INFLUXDB_TOKEN")
+	url := "http://localhost:8086"
+	client := influxdb2.NewClient(url, token)
+
+	org := "georgedinicola"
+	// org := os.Getenv("INFLUXDB_ORGANIZATION")
+	bucket := "gateway_metrics"
+	// bucket := os.Getenv("INFLUXDB_BUCKET")
+	writeAPI := client.WriteAPIBlocking(org, bucket)
+	measurement := "network_metrics"
+
 	// process results as they arrive
 	for result := range resultsChannel {
 		if result.Error != nil {
@@ -98,15 +114,57 @@ func main() {
 		case "GetGatewaySignalStrength":
 			signalData := result.Result.(network.SignalData)
 			fmt.Printf("Gateway Signal Strength: %v (%v)\n", signalData.SignalStrength, signalData.SignalStrengthClassification)
+
+			// write to InfluxDB
+			tags := map[string]string{
+				"collection_type": "signal",
+			}
+			fields := map[string]interface{}{
+				"signal_strength": signalData.SignalStrength,
+			}
+			point := write.NewPoint(measurement, tags, fields, time.Now())
+			if err := writeAPI.WritePoint(context.Background(), point); err != nil {
+				log.Error(err)
+			}
 		case "CollectSpeedMetrics":
 			speedTestData := result.Result.(network.SpeedTestData)
 			fmt.Printf("Download Speed: %v\n", speedTestData.DownloadSpeed)
 			fmt.Printf("Upload Speed: %v\n", speedTestData.UploadSpeed)
+
+			// write to InfluxDB
+			tags := map[string]string{
+				"collection_type": "ookla",
+			}
+			fields := map[string]interface{}{
+				"download_speed": speedTestData.DownloadSpeed,
+				"upload_speed":   speedTestData.UploadSpeed,
+			}
+			point := write.NewPoint(measurement, tags, fields, time.Now())
+			if err := writeAPI.WritePoint(context.Background(), point); err != nil {
+				log.Error(err)
+			}
 		case "PingGatewayForStats":
 			pingData := result.Result.(network.PingData)
 			fmt.Printf("Packet Loss percentage: %v\n", pingData.PacketLossPercentage)
 			fmt.Printf("Round-trip min/avg/max/stddev = %v/%v/%v/%v\n",
 				pingData.MinRtt, pingData.AvgRtt, pingData.MaxRtt, pingData.StdDevRtt)
+
+			// write to InfluxDB
+			tags := map[string]string{
+				"collection_type": "ping",
+			}
+			fields := map[string]interface{}{
+				"packet_loss_percentage": pingData.PacketLossPercentage,
+				"jitter":                 pingData.Jitter,
+				"min_packet_latency":     pingData.MinRtt,
+				"avg_packet_latency":     pingData.AvgRtt,
+				"max_packet_latency":     pingData.AvgRtt,
+				"stddev_packet_latency":  pingData.StdDevRtt,
+			}
+			point := write.NewPoint(measurement, tags, fields, time.Now())
+			if err := writeAPI.WritePoint(context.Background(), point); err != nil {
+				log.Error(err)
+			}
 		}
 	}
 }
