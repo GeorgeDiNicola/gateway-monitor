@@ -93,15 +93,13 @@ func main() {
 	}()
 
 	token := os.Getenv("INFLUXDB_TOKEN")
-	url := "http://localhost:8086"
+	url := os.Getenv("INFLUXDB_URL")
 	client := influxdb2.NewClient(url, token)
-
-	org := "georgedinicola"
-	// org := os.Getenv("INFLUXDB_ORGANIZATION")
-	bucket := "gateway_metrics"
-	// bucket := os.Getenv("INFLUXDB_BUCKET")
-	writeAPI := client.WriteAPIBlocking(org, bucket)
+	org := os.Getenv("INFLUXDB_ORG")
+	bucket := os.Getenv("INFLUXDB_BUCKET")
 	measurement := "network_metrics"
+
+	writeAPI := client.WriteAPIBlocking(org, bucket)
 
 	// process results as they arrive
 	for result := range resultsChannel {
@@ -149,13 +147,16 @@ func main() {
 			fmt.Printf("Round-trip min/avg/max/stddev = %v/%v/%v/%v\n",
 				pingData.MinRtt, pingData.AvgRtt, pingData.MaxRtt, pingData.StdDevRtt)
 
+			jitter := float64(pingData.Jitter) / float64(time.Millisecond)
+
 			// write to InfluxDB
 			tags := map[string]string{
 				"collection_type": "ping",
 			}
+
 			fields := map[string]interface{}{
 				"packet_loss_percentage": pingData.PacketLossPercentage,
-				"jitter":                 pingData.Jitter,
+				"jitter":                 jitter,
 				"min_packet_latency":     pingData.MinRtt,
 				"avg_packet_latency":     pingData.AvgRtt,
 				"max_packet_latency":     pingData.AvgRtt,

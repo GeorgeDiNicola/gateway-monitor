@@ -10,7 +10,7 @@ import (
 	"github.com/influxdata/influxdb-client-go/api/write"
 )
 
-func no() {
+func writeToInflux() {
 	token := os.Getenv("INFLUXDB_TOKEN")
 	url := "http://localhost:8086"
 	client := influxdb2.NewClient(url, token)

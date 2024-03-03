@@ -11,3 +11,6 @@ A diagnostic monitoring tool that collects metrics about a home internet gateway
 
 ## Supported Operating Systems
 macOS, Linux
+
+## Dashboard of Metrics Streamed to the InfluxDB
+![Dashboard](influx_dashboard.png)

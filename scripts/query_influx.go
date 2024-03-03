@@ -10,7 +10,6 @@ import (
 )
 
 func main() {
-
 	token := os.Getenv("INFLUXDB_TOKEN")
 	url := "http://localhost:8086"
 	client := influxdb2.NewClient(url, token)
