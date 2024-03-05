@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -35,26 +36,30 @@ func getGatewayIpAddress() (string, error) {
 }
 
 func main() {
+
+	log.Out = os.Stdout
+	log.Formatter = &logrus.JSONFormatter{}
+
+	// TODO: add config website name or default gateway option
+	// gatewayIPAddr, err := getGatewayIpAddress()
+	// if err != nil {
+	// 	log.Fatalf("Could not get gateway IP address: %v", err)
+	// 	return
+	// }
+
+	gatewayIPAddr := "google.com"
+	fmt.Println("Gateway IP:", gatewayIPAddr)
+	fmt.Println("Measurements are classified into groups: Excellent, Good, Fair, Poor/Weak")
+
+	var wg sync.WaitGroup
+
+	type Result struct {
+		Result interface{}
+		Error  error
+		ID     string
+	}
+
 	for {
-		log.Out = os.Stdout
-		log.Formatter = &logrus.JSONFormatter{}
-
-		// TODO: add config website name or default gateway option
-		gatewayIPAddr, err := getGatewayIpAddress()
-		if err != nil {
-			log.Fatalf("Could not get gateway IP address: %v", err)
-			return
-		}
-		fmt.Println("Gateway IP:", gatewayIPAddr)
-		fmt.Println("Measurements are classified into groups: Excellent, Good, Fair, Poor/Weak")
-
-		var wg sync.WaitGroup
-
-		type Result struct {
-			Result interface{}
-			Error  error
-			ID     string
-		}
 		resultsChannel := make(chan Result, 3)
 
 		wg.Add(1)
@@ -99,7 +104,7 @@ func main() {
 		bucket := os.Getenv("INFLUXDB_BUCKET")
 		measurement := "network_metrics"
 
-		writeAPI := client.WriteAPI(org, bucket)
+		writeAPI := client.WriteAPIBlocking(org, bucket)
 
 		// process results as they arrive
 		for result := range resultsChannel {
@@ -121,7 +126,9 @@ func main() {
 					"signal_strength": signalData.SignalStrength,
 				}
 				point := write.NewPoint(measurement, tags, fields, time.Now())
-				writeAPI.WritePoint(point)
+				if err := writeAPI.WritePoint(context.Background(), point); err != nil {
+					log.Error(err)
+				}
 			case "CollectSpeedMetrics":
 				speedTestData := result.Result.(network.SpeedTestData)
 				fmt.Printf("Download Speed: %v\n", speedTestData.DownloadSpeed)
@@ -136,7 +143,9 @@ func main() {
 					"upload_speed":   speedTestData.UploadSpeed,
 				}
 				point := write.NewPoint(measurement, tags, fields, time.Now())
-				writeAPI.WritePoint(point)
+				if err := writeAPI.WritePoint(context.Background(), point); err != nil {
+					log.Error(err)
+				}
 			case "PingGatewayForStats":
 				pingData := result.Result.(network.PingData)
 				fmt.Printf("Packet Loss percentage: %v\n", pingData.PacketLossPercentage)
@@ -159,10 +168,12 @@ func main() {
 					"stddev_packet_latency":  pingData.StdDevRtt,
 				}
 				point := write.NewPoint(measurement, tags, fields, time.Now())
-				writeAPI.WritePoint(point)
+				if err := writeAPI.WritePoint(context.Background(), point); err != nil {
+					log.Error(err)
+				}
 			}
+
 			time.Sleep(60 * time.Second)
 		}
-
 	}
 }
