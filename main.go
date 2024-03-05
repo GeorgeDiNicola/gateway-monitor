@@ -39,16 +39,8 @@ func main() {
 
 	log.Out = os.Stdout
 	log.Formatter = &logrus.JSONFormatter{}
-
-	// TODO: add config website name or default gateway option
-	// gatewayIPAddr, err := getGatewayIpAddress()
-	// if err != nil {
-	// 	log.Fatalf("Could not get gateway IP address: %v", err)
-	// 	return
-	// }
-
-	gatewayIPAddr := "google.com"
-	fmt.Println("Gateway IP:", gatewayIPAddr)
+	gatewayAddr := "google.com"
+	fmt.Printf("Testing internet connection to %v:", gatewayAddr)
 	fmt.Println("Measurements are classified into groups: Excellent, Good, Fair, Poor/Weak")
 
 	var wg sync.WaitGroup
@@ -85,7 +77,7 @@ func main() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if result, err := network.PingGatewayForStats(gatewayIPAddr, 25, 1, 60); err != nil {
+			if result, err := network.PingGatewayForStats(gatewayAddr, 25, 1, 60); err != nil {
 				resultsChannel <- Result{Error: err, ID: "PingGatewayForStats"}
 			} else {
 				resultsChannel <- Result{Result: result, ID: "PingGatewayForStats"}
@@ -100,10 +92,10 @@ func main() {
 		token := os.Getenv("INFLUXDB_TOKEN")
 		url := os.Getenv("INFLUXDB_URL")
 		client := influxdb2.NewClient(url, token)
+
 		org := os.Getenv("INFLUXDB_ORG")
 		bucket := os.Getenv("INFLUXDB_BUCKET")
 		measurement := "network_metrics"
-
 		writeAPI := client.WriteAPIBlocking(org, bucket)
 
 		// process results as they arrive

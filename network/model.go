@@ -9,12 +9,10 @@ type PingData struct {
 	MaxRtt               float64 // Ms
 	StdDevRtt            float64 // Ms
 }
-
 type SignalData struct {
 	SignalStrength               float64 // dBm
 	SignalStrengthClassification string
 }
-
 type SpeedTestData struct {
 	DownloadSpeed float64 // Mbps
 	UploadSpeed   float64 // Mbps
