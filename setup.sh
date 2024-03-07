@@ -1,5 +1,5 @@
 # get the docker-compose.yml from github
-curl -o docker-compose.yml https://github.com/GeorgeDiNicola/gateway-monitor/blob/main/docker-compose.yml
+#curl -o docker-compose.yml https://github.com/GeorgeDiNicola/gateway-monitor/blob/main/docker-compose.yml
 
 # empty current env file
 echo "" > test_influxdb.env

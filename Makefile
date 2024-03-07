@@ -1,5 +1,11 @@
-build:
+build-image:
 	docker build --tag gateway-monitor .
+
+tag-image:
+	docker tag gateway-monitor:latest georgedinicola/gateway-monitor:latest
+
+publish-image:
+	docker push georgedinicola/gateway-monitor:latest
 
 start-system:
 	docker-compose --env-file test_influxdb.env up
