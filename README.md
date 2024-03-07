@@ -25,3 +25,6 @@ Round-trip min/avg/max/stddev = 4.2/7.58896/21.108/3.337278
 
 ## Dashboard of Metrics Streamed to the InfluxDB
 ![Dashboard](docs/gateway-monitor-dashboard.png)
+
+## Large sample of download & upload speed (Mbps)
+![DownloadUpload](docs/gateway-upload-download)
